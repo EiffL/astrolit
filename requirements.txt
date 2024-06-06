@@ -1,0 +1,8 @@
+astropy
+datasets
+h5py
+matplotlib
+numpy
+pandas
+torch
+streamlit
