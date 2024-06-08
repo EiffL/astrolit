@@ -7,12 +7,14 @@ import numpy as np
 import pandas as pd
 import torch
 import streamlit as st
+from sparcl.client import SparclClient
 
 from astro_utils import (
     search_catalogue,
     similarity_search,
-    decals_to_rgb,
     radec_string_to_degrees,
+    get_image_url_from_coordinates,
+    get_spectrum_from_targets,
 )
 
 
@@ -54,32 +56,54 @@ display_method = header_cols[-1].button("Interested in learning how this works?"
 ###########################################################
 # Load datasets
 # PROVABGS contains the degree information
-PROVABGS_PATH = "/mnt/home/lparker/ceph/BGS_ANY_full.provabgs.sv3.v0.hdf5"
+# PROVABGS_PATH = "/mnt/home/lparker/ceph/BGS_ANY_full.provabgs.sv3.v0.hdf5"
+
+# ra,dec,targetid, key
+# CATALOG_PATH = "/mnt/ceph/users/flanusse/astroclip_matched_catalog.hdf5"
+CATALOG_PATH = "astroclip_matched_catalog.hdf5"
 
 # EMBEDDINGS file contains the CLIP aligned embeddings
-CLIP_EMBEDDINGS_PATH = "/mnt/home/lsarra/ceph/bad_embeddings/9gsmdi8o/0/file.h5py"
+# CLIP_EMBEDDINGS_PATH = "/mnt/home/lsarra/ceph/bad_embeddings/9gsmdi8o/0/file.h5py"
+CLIP_EMBEDDINGS_PATH = "clip_embeddings.hdf5"
 
 # ORIGINAL DATA
-RAW_PATH = "/mnt/ceph/users/polymathic/mmoma/datasets/astroclip_file/"
+# RAW_PATH = "/mnt/ceph/users/polymathic/mmoma/datasets/astroclip_file/"
 
 
 # Load datasets
-provabgs_dataset = Table.read(PROVABGS_PATH)
-provabgs_location = provabgs_dataset[("TARGETID", "RA", "DEC")]
-
-with h5py.File(CLIP_EMBEDDINGS_PATH, "r") as f:
-    clip_targetid = np.concatenate([f["train"]["targetid"], f["test"]["targetid"]])
-    clip_images = np.concatenate(
-        [f["train"]["image_features"], f["test"]["image_features"]]
-    )
-    clip_spectra = np.concatenate(
-        [f["train"]["spectrum_features"], f["test"]["spectrum_features"]]
-    )
+# provabgs_dataset = Table.read(PROVABGS_PATH)
 
 
-raw_dataset = load_from_disk(RAW_PATH)
-raw_dataset.set_format(type="torch")
-raw_dataset = concatenate_datasets([raw_dataset["train"], raw_dataset["test"]])
+# TODO: cache dataset creation function
+def get_provabgs_dataset(CATALOG_PATH):
+    provabgs_dataset = Table.read(CATALOG_PATH)
+    provabgs_location = provabgs_dataset[("targetid", "ra", "dec")]
+    return provabgs_location
+
+
+# TODO: cache embedding creation function
+def get_clip_embeddings(CLIP_EMBEDDINGS_PATH):
+    with h5py.File(CLIP_EMBEDDINGS_PATH, "r") as f:
+        clip_targetid = np.concatenate([f["train"]["targetid"], f["test"]["targetid"]])
+        clip_images = np.concatenate(
+            [f["train"]["image_features"], f["test"]["image_features"]]
+        )
+        clip_spectra = np.concatenate(
+            [f["train"]["spectrum_features"], f["test"]["spectrum_features"]]
+        )
+    return clip_targetid, clip_images, clip_spectra
+
+
+def get_sparcl_client():
+    return SparclClient()
+
+
+sparcl_client = get_sparcl_client()
+provabgs_location = get_provabgs_dataset(CATALOG_PATH)
+clip_targetid, clip_images, clip_spectra = get_clip_embeddings(CLIP_EMBEDDINGS_PATH)
+# raw_dataset = load_from_disk(RAW_PATH)
+# raw_dataset.set_format(type="torch")
+# raw_dataset = concatenate_datasets([raw_dataset["train"], raw_dataset["test"]])
 ###########################################################
 
 
@@ -89,6 +113,7 @@ def describe_method():
     st.markdown(
         """
         ## TODO: Add AstroCLIP paper reference and comments.
+        ### [AstroCLIP](https://arxiv.org/abs/2310.03024)
         ### A bit about the method: 
         - The similarity of two images is quite easy to judge by eye - but writing an algorithm to do the same is not as easy as one might think! This is because as hunans we can easily identify and understand what object is in the image.                     
         - A machine is different - it simply looks individual pixezl values. Yet two images that to us have very similar properties and appearences will likely have vastly different pixel values. For example, imagine rotating a galaxy image by 90 degrees. It it obviously still the same galaxy, but the pixel values have completeley changed.                                       
@@ -163,9 +188,12 @@ def galaxy_search():
         # not found
 
     # Search raw image/spectra
-    raw_index = np.argwhere(raw_dataset["targetid"] == input_object["targetid"])[0]
-    image_raw = raw_dataset[raw_index]["image"]
-    spectrum_raw = raw_dataset[raw_index]["spectrum"]
+    # raw_index = np.argwhere(raw_dataset["targetid"] == input_object["targetid"])[0]
+    # image_raw = raw_dataset[raw_index]["image"]
+    # spectrum_raw = raw_dataset[raw_index]["spectrum"]
+    ra, dec = input_object["ra"], input_object["dec"]
+    image_raw_url = get_image_url_from_coordinates(ra=ra, dec=dec)
+    # spectrum_raw_url = ... # not being shown
 
     # Compute similarity
     result_images_idx = similarity_search(
@@ -173,16 +201,17 @@ def galaxy_search():
     )
     result_images = []
     for targetid in clip_targetid[result_images_idx["index"]]:
-        idx = np.argwhere(raw_dataset["targetid"] == targetid)[0]
-        result_images.append(raw_dataset[idx]["image"])
+        idx = np.argwhere(provabgs_location["targetid"] == targetid)[0]
+        ra, dec = provabgs_location[idx]["ra"], provabgs_location[idx]["dec"]
+        found_image_url = get_image_url_from_coordinates(ra=ra, dec=dec)
+        result_images.append(found_image_url)
 
     result_spectra_idx = similarity_search(
         query_index, clip_spectra, nnearest=nnearest + 1
     )
-    result_spectra = []
-    for targetid in clip_targetid[result_spectra_idx["index"]]:
-        idx = np.argwhere(raw_dataset["targetid"] == targetid)[0]
-        result_spectra.append(raw_dataset[idx]["spectrum"])
+    result_spectra = get_spectrum_from_targets(
+        sparcl_client, targetids=clip_targetid[result_spectra_idx["index"]].tolist()
+    )
 
     # Plots
 
@@ -196,7 +225,7 @@ def galaxy_search():
     page_cols = st.columns(3)
     page_cols[0].subheader(lab)
     page_cols[0].image(
-        decals_to_rgb(image_raw).squeeze().numpy(),
+        image_raw_url,
         use_column_width="always",
         caption=lab_radec,
     )  # use_column_width='auto')
@@ -216,14 +245,14 @@ def galaxy_search():
         for icol in range(ncolumns):
             if iimg >= len(result_images):
                 break
-            image = result_images[iimg]
+            image_url = result_images[iimg]
             lab = f"Similarity={result_images_idx['score'][iimg]:.4f}\n"
             if ncolumns > 5:
                 lab = None
 
             # add image to grid
             image_cols[icol].image(
-                decals_to_rgb(image).squeeze().numpy(),
+                image_url,
                 caption=lab,
                 use_column_width="always",
             )
@@ -247,7 +276,7 @@ def galaxy_search():
             if ncolumns > 5:
                 lab = None
 
-            # add image to grid
+            # add spectrum to grid
             fig = plt.figure()
             plt.plot(spectrum.squeeze()[::20])
             plt.title(lab)

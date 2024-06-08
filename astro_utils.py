@@ -5,7 +5,9 @@ import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 import torch
+from sparcl.client import SparclClient
 import sys
+
 
 def radec_string_to_degrees(ra_str, dec_str, ra_unit_formats, dec_unit_formats, st_obj):
     """convert from weird astronomer units to useful ones (degrees)"""
@@ -102,7 +104,7 @@ def random_object(provabgs_location):
 
 def search_catalogue(ra, dec, catalog, nnearest=1, far_distance_npix=10):
 
-    sep = angular_separation(ra, dec, catalog["RA"], catalog["DEC"])
+    sep = angular_separation(ra, dec, catalog["ra"], catalog["dec"])
     min_sep = 1e9
     query_min_sep = np.min(sep)
     query_index = np.argmin(sep)
@@ -110,9 +112,9 @@ def search_catalogue(ra, dec, catalog, nnearest=1, far_distance_npix=10):
         return {
             "index": np.argmin(sep),
             "distance": sep[query_index],
-            "ra": catalog["RA"][query_index],
-            "dec": catalog["DEC"][query_index],
-            "targetid": catalog["TARGETID"][query_index],
+            "ra": catalog["ra"][query_index],
+            "dec": catalog["dec"][query_index],
+            "targetid": catalog["targetid"][query_index],
             "min_sep": query_min_sep,
         }
     else:
@@ -220,3 +222,15 @@ def decals_to_rgb(image, bands=["g", "r", "z"], scales=None, m=0.03, Q=20.0):
     image = torch.clamp(image, 0, 1)
 
     return image
+
+
+def get_image_url_from_coordinates(ra: float, dec: float) -> str:
+    return f"https://www.legacysurvey.org/viewer/jpeg-cutout?ra={float(ra)}&dec={float(dec)}&layer=ls-dr9-north&pixscale=0.262"
+
+
+def get_spectrum_from_targets(client: SparclClient, targetids: list) -> np.ndarray:
+    object_id = client.find(
+        outfields=["sparcl_id"], constraints={"targetid": targetids}
+    )
+    retrieved_object = client.retrieve(object_id.ids, include=["flux"])
+    return np.array([r["flux"] for idx, r in enumerate(retrieved_object) if idx > 0])
