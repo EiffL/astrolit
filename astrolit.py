@@ -5,7 +5,6 @@ import matplotlib.pyplot as plt
 import math
 import numpy as np
 import pandas as pd
-import torch
 import streamlit as st
 from sparcl.client import SparclClient
 
@@ -64,7 +63,7 @@ CATALOG_PATH = "astroclip_matched_catalog.hdf5"
 
 # EMBEDDINGS file contains the CLIP aligned embeddings
 # CLIP_EMBEDDINGS_PATH = "/mnt/home/lsarra/ceph/bad_embeddings/9gsmdi8o/0/file.h5py"
-CLIP_EMBEDDINGS_PATH = "clip_embeddings.hdf5"
+CLIP_EMBEDDINGS_PATH = "with_target_id_full.hdf5"
 
 # ORIGINAL DATA
 # RAW_PATH = "/mnt/ceph/users/polymathic/mmoma/datasets/astroclip_file/"
@@ -74,24 +73,29 @@ CLIP_EMBEDDINGS_PATH = "clip_embeddings.hdf5"
 # provabgs_dataset = Table.read(PROVABGS_PATH)
 
 
-# TODO: cache dataset creation function
-def get_provabgs_dataset(CATALOG_PATH):
-    provabgs_dataset = Table.read(CATALOG_PATH)
-    provabgs_location = provabgs_dataset[("targetid", "ra", "dec")]
-    return provabgs_location
+# # TODO: cache dataset creation function
+# def get_provabgs_dataset(CATALOG_PATH):
+#     provabgs_dataset = Table.read(CATALOG_PATH)
+#     provabgs_location = provabgs_dataset[("targetid", "ra", "dec")]
+#     return provabgs_location
 
 
 # TODO: cache embedding creation function
 def get_clip_embeddings(CLIP_EMBEDDINGS_PATH):
-    with h5py.File(CLIP_EMBEDDINGS_PATH, "r") as f:
-        clip_targetid = np.concatenate([f["train"]["targetid"], f["test"]["targetid"]])
-        clip_images = np.concatenate(
-            [f["train"]["image_features"], f["test"]["image_features"]]
-        )
-        clip_spectra = np.concatenate(
-            [f["train"]["spectrum_features"], f["test"]["spectrum_features"]]
-        )
-    return clip_targetid, clip_images, clip_spectra
+    # with h5py.File(CLIP_EMBEDDINGS_PATH, "r") as f:
+    #     clip_targetid = np.concatenate([f["train"]["targetid"], f["test"]["targetid"]])
+    #     clip_images = np.concatenate(
+    #         [f["train"]["image_features"], f["test"]["image_features"]]
+    #     )
+    #     clip_spectra = np.concatenate(
+    #         [f["train"]["spectrum_features"], f["test"]["spectrum_features"]]
+    #     )
+    # return clip_targetid, clip_images, clip_spectra
+    dataset = Table.read(CLIP_EMBEDDINGS_PATH)
+    dataset = dataset[
+        ("targetid", "ra", "dec", "image_embeddings", "spectrum_embeddings")
+    ]
+    return dataset
 
 
 def get_sparcl_client():
@@ -99,8 +103,12 @@ def get_sparcl_client():
 
 
 sparcl_client = get_sparcl_client()
-provabgs_location = get_provabgs_dataset(CATALOG_PATH)
-clip_targetid, clip_images, clip_spectra = get_clip_embeddings(CLIP_EMBEDDINGS_PATH)
+# provabgs_location = get_provabgs_dataset(CATALOG_PATH)
+dataset = get_clip_embeddings(CLIP_EMBEDDINGS_PATH)
+clip_targetid = dataset["targetid"]
+clip_images = dataset["image_embeddings"]
+clip_spectra = dataset["spectrum_embeddings"]
+# clip_targetid, clip_images, clip_spectra = get_clip_embeddings(CLIP_EMBEDDINGS_PATH)
 # raw_dataset = load_from_disk(RAW_PATH)
 # raw_dataset.set_format(type="torch")
 # raw_dataset = concatenate_datasets([raw_dataset["train"], raw_dataset["test"]])
@@ -174,7 +182,7 @@ def galaxy_search():
     )
 
     # Search object at location
-    input_object = search_catalogue(input_ra, input_dec, provabgs_location)
+    input_object = search_catalogue(input_ra, input_dec, dataset)
 
     # Search precomputed embedding (in CLIP dataset)
     query_index = np.argwhere(clip_targetid == input_object["targetid"])[0]
@@ -201,8 +209,8 @@ def galaxy_search():
     )
     result_images = []
     for targetid in clip_targetid[result_images_idx["index"]]:
-        idx = np.argwhere(provabgs_location["targetid"] == targetid)[0]
-        ra, dec = provabgs_location[idx]["ra"], provabgs_location[idx]["dec"]
+        idx = np.argwhere(clip_targetid == targetid)[0]
+        ra, dec = dataset[idx]["ra"], dataset[idx]["dec"]
         found_image_url = get_image_url_from_coordinates(ra=ra, dec=dec)
         result_images.append(found_image_url)
 

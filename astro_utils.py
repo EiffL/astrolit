@@ -4,7 +4,6 @@ import h5py
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
-import torch
 from sparcl.client import SparclClient
 import sys
 
@@ -198,30 +197,30 @@ RGB_SCALES = {
 }
 
 
-def decals_to_rgb(image, bands=["g", "r", "z"], scales=None, m=0.03, Q=20.0):
-    """Image processing function to convert DECaLS images to RGB.
+# def decals_to_rgb(image, bands=["g", "r", "z"], scales=None, m=0.03, Q=20.0):
+#     """Image processing function to convert DECaLS images to RGB.
 
-    Args:
-        image: torch.Tensor
-            The input image tensor with shape [batch, 3, npix, npix]
-    Returns:
-        torch.Tensor: The processed image tensor with shape [batch, 3, npix, npix, 3]
-    """
-    axes, scales = zip(*[RGB_SCALES[bands[i]] for i in range(len(bands))])
-    scales = [scales[i] for i in axes]
-    # Changing image shape to [batch_size, npix, npix, nchannel]
-    image = image.flip(-1)  # TODO: Figure out why flipping axis is necessary
-    scales = torch.tensor(scales, dtype=torch.float32).to(image.device)
+#     Args:
+#         image: torch.Tensor
+#             The input image tensor with shape [batch, 3, npix, npix]
+#     Returns:
+#         torch.Tensor: The processed image tensor with shape [batch, 3, npix, npix, 3]
+#     """
+#     axes, scales = zip(*[RGB_SCALES[bands[i]] for i in range(len(bands))])
+#     scales = [scales[i] for i in axes]
+#     # Changing image shape to [batch_size, npix, npix, nchannel]
+#     image = image.flip(-1)  # TODO: Figure out why flipping axis is necessary
+#     scales = torch.tensor(scales, dtype=torch.float32).to(image.device)
 
-    I = torch.sum(torch.clamp(image * scales + m, min=0), dim=-1) / len(bands)
+#     I = torch.sum(torch.clamp(image * scales + m, min=0), dim=-1) / len(bands)
 
-    fI = torch.arcsinh(Q * I) / np.sqrt(Q)
-    I += (I == 0.0) * 1e-6
+#     fI = torch.arcsinh(Q * I) / np.sqrt(Q)
+#     I += (I == 0.0) * 1e-6
 
-    image = (image * scales + m) * (fI / I).unsqueeze(-1)
-    image = torch.clamp(image, 0, 1)
+#     image = (image * scales + m) * (fI / I).unsqueeze(-1)
+#     image = torch.clamp(image, 0, 1)
 
-    return image
+#     return image
 
 
 def get_image_url_from_coordinates(ra: float, dec: float) -> str:

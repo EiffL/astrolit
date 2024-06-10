@@ -4,6 +4,5 @@ h5py
 matplotlib
 numpy
 pandas
-torch
 sparclclient
 streamlit
