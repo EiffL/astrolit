@@ -107,7 +107,7 @@ import requests
 from io import BytesIO
 # Replace 'YOUR_FILE_ID_HERE' with your actual file ID
 url = 'https://drive.google.com/uc?id=1XmUlsb1QjNlbTqJa5ohOOvEmym_Sszb5'
-
+url = 'https://drive.google.com/uc?id=1eoEcEvTyAAcs9SGWkNBSFS4jvUF17Psy' # smaller version
 # # @st.cache
 # def load_model_from_gdrive(url):
 #     response = requests.get(url)
