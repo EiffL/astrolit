@@ -1,5 +1,6 @@
 astropy
 datasets
+gdown
 h5py
 matplotlib
 numpy

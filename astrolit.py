@@ -5,6 +5,7 @@ import matplotlib.pyplot as plt
 import math
 import numpy as np
 import pandas as pd
+import os
 import streamlit as st
 from sparcl.client import SparclClient
 
@@ -59,7 +60,7 @@ display_method = header_cols[-1].button("Interested in learning how this works?"
 
 # ra,dec,targetid, key
 # CATALOG_PATH = "/mnt/ceph/users/flanusse/astroclip_matched_catalog.hdf5"
-CATALOG_PATH = "astroclip_matched_catalog.hdf5"
+# CATALOG_PATH = "astroclip_matched_catalog.hdf5"
 
 # EMBEDDINGS file contains the CLIP aligned embeddings
 # CLIP_EMBEDDINGS_PATH = "/mnt/home/lsarra/ceph/bad_embeddings/9gsmdi8o/0/file.h5py"
@@ -101,6 +102,24 @@ def get_clip_embeddings(CLIP_EMBEDDINGS_PATH):
 def get_sparcl_client():
     return SparclClient()
 
+
+import requests
+from io import BytesIO
+# Replace 'YOUR_FILE_ID_HERE' with your actual file ID
+url = 'https://drive.google.com/uc?id=1XmUlsb1QjNlbTqJa5ohOOvEmym_Sszb5'
+
+# # @st.cache
+# def load_model_from_gdrive(url):
+#     response = requests.get(url)
+#     model_file = BytesIO(response.content)
+#     # model = load_model(model_file)
+#     return model_file
+
+# model_file = load_model_from_gdrive(url)
+
+if not os.path.isfile(CLIP_EMBEDDINGS_PATH):
+    import gdown
+    gdown.download(url, CLIP_EMBEDDINGS_PATH)
 
 sparcl_client = get_sparcl_client()
 # provabgs_location = get_provabgs_dataset(CATALOG_PATH)
