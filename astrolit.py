@@ -1,10 +1,10 @@
 from astropy.table import Table, join
-from datasets import load_from_disk, concatenate_datasets
-import h5py
+# from datasets import load_from_disk, concatenate_datasets
+# import h5py
 import matplotlib.pyplot as plt
 import math
 import numpy as np
-import pandas as pd
+# import pandas as pd
 import os
 import streamlit as st
 from sparcl.client import SparclClient
@@ -82,6 +82,7 @@ CLIP_EMBEDDINGS_PATH = "with_target_id_full.hdf5"
 
 
 # TODO: cache embedding creation function
+@st.cache_data
 def get_clip_embeddings(CLIP_EMBEDDINGS_PATH):
     # with h5py.File(CLIP_EMBEDDINGS_PATH, "r") as f:
     #     clip_targetid = np.concatenate([f["train"]["targetid"], f["test"]["targetid"]])
@@ -98,7 +99,7 @@ def get_clip_embeddings(CLIP_EMBEDDINGS_PATH):
     ]
     return dataset
 
-
+@st.cache_resource
 def get_sparcl_client():
     return SparclClient()
 

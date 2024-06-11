@@ -1,9 +1,6 @@
 astropy
-datasets
 gdown
-h5py
 matplotlib
 numpy
-pandas
 sparclclient
 streamlit
