@@ -105,9 +105,10 @@ def get_sparcl_client():
 
 import requests
 from io import BytesIO
-# Replace 'YOUR_FILE_ID_HERE' with your actual file ID
+# Replace 'YOUR_FILE_ID_HERE' with your actual file IDhttps://drive.google.com/file/d/1dnF28XdOtiTPKDwuG1oWra2awx1S1Vvy/view?usp=sharing
 url = 'https://drive.google.com/uc?id=1XmUlsb1QjNlbTqJa5ohOOvEmym_Sszb5'
 url = 'https://drive.google.com/uc?id=1eoEcEvTyAAcs9SGWkNBSFS4jvUF17Psy' # smaller version
+url = 'https://drive.google.com/uc?id=1dnF28XdOtiTPKDwuG1oWra2awx1S1Vvy' # pca version
 # # @st.cache
 # def load_model_from_gdrive(url):
 #     response = requests.get(url)
