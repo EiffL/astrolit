@@ -231,5 +231,9 @@ def get_spectrum_from_targets(client: SparclClient, targetids: list) -> np.ndarr
     object_id = client.find(
         outfields=["sparcl_id"], constraints={"targetid": targetids}
     )
-    retrieved_object = client.retrieve(object_id.ids, include=["flux"])
-    return np.array([r["flux"] for idx, r in enumerate(retrieved_object) if idx > 0])
+    retrieved_object = [client.retrieve([idx], include=["flux"]) for idx in object_id.ids]
+    
+    
+    # bug in client: parallelization does not work (pickle file truncated)
+    # retrieved_object = client.retrieve(object_id.ids, include=["flux"])
+    return np.array([r[1]["flux"] for idx, r in enumerate(retrieved_object)])
