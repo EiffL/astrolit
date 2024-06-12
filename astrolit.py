@@ -79,16 +79,17 @@ url = "https://drive.google.com/uc?id=1XmUlsb1QjNlbTqJa5ohOOvEmym_Sszb5"
 url = "https://drive.google.com/uc?id=1eoEcEvTyAAcs9SGWkNBSFS4jvUF17Psy"  # smaller version
 url = "https://drive.google.com/uc?id=1dnF28XdOtiTPKDwuG1oWra2awx1S1Vvy"  # pca version
 
-if not os.path.isfile(CLIP_EMBEDDINGS_PATH):
-    import gdown
+with st.spinner(text="Loading embedding dataset..."):
+    if not os.path.isfile(CLIP_EMBEDDINGS_PATH):
+        import gdown
 
-    gdown.download(url, CLIP_EMBEDDINGS_PATH)
+        gdown.download(url, CLIP_EMBEDDINGS_PATH)
 
-sparcl_client = get_sparcl_client()
-dataset = get_clip_embeddings(CLIP_EMBEDDINGS_PATH)
-clip_targetid = dataset["targetid"]
-clip_images = dataset["image_embeddings"]
-clip_spectra = dataset["spectrum_embeddings"]
+    sparcl_client = get_sparcl_client()
+    dataset = get_clip_embeddings(CLIP_EMBEDDINGS_PATH)
+    clip_targetid = dataset["targetid"]
+    clip_images = dataset["image_embeddings"]
+    clip_spectra = dataset["spectrum_embeddings"]
 ###########################################################
 
 
@@ -134,7 +135,7 @@ def galaxy_search():
                 """
         )
 
-    # st.sidebar.markdown('### Set up and submit your query!')
+    st.sidebar.markdown('### Search a galaxy')
     ra_unit_formats = "degrees or HH:MM:SS"
     dec_unit_formats = "degrees or DD:MM:SS"
 
@@ -171,7 +172,8 @@ def galaxy_search():
         "Number of similar galaxies to display", num_nearest_vals
     )
 
-    show_results(input_ra, input_dec, dataset, nnearest)
+    with st.spinner("Loading images and spectra from Legacy Survey server..."):
+        show_results(input_ra, input_dec, dataset, nnearest)
 
 
 @st.experimental_fragment
