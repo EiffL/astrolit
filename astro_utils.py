@@ -1,11 +1,29 @@
-# from astropy.table import Table, join
-# from datasets import load_from_disk, concatenate_datasets
-# import h5py
-# import matplotlib.pyplot as plt
 import numpy as np
-# import pandas as pd
+import streamlit as st
 from sparcl.client import SparclClient
 import sys
+
+
+SUGGESTED_GALAXIES = [  # RA, dec
+    (217.087964047984, 35.4057145149392),
+    (217.270670912268, 35.4312981579829),
+    (253.549264619792, 35.7513391424161),
+    (112.496608501805, 37.8035615243621),
+    (156.209101879882, 43.470629428821),
+    (234.533888315585, 44.0278076308697),
+    (234.533888315585, 44.0278076308697),
+    (167.705186795192, 49.3834387435459),
+    (177.640144966108, 51.7523278755424),
+    (180.137092613175, 53.3908133349163),
+    (177.256892905074, 53.76387341558),
+    (175.313314566102, 54.5548580678815),
+    (183.936725761662, 54.8575921969756),
+    (176.727391891253, 55.3959346164124),
+    (178.571083224291, 55.4708038539387),
+    (176.438307154753, 55.7998719958611),
+    (270.65397689115, 65.9491495908669),
+    (271.283711607834, 67.1483953511586),
+]
 
 
 def radec_string_to_degrees(ra_str, dec_str, ra_unit_formats, dec_unit_formats, st_obj):
@@ -118,7 +136,7 @@ def search_catalogue(ra, dec, catalog, nnearest=1, far_distance_npix=10):
         }
     else:
         # no close galaxy found
-        print("No galaxy found.")
+        st.write(f"No galaxy found at {ra} RA and {dec} dec.")
 
 
 def calculate_similarity(vector, embeddings):
@@ -132,7 +150,6 @@ def similarity_search(
     query_index,
     embeddings,
     nnearest=5,
-    min_angular_separation=96,
 ):
     """
     Return indices and similarity scores to nearest nnearest data samples.
@@ -147,43 +164,11 @@ def similarity_search(
     similarity_inv: bool
         If True returns most similar, if False returns least similar
     """
-    pixel_size = 0.262 / 3600  # arcsec to degrees
-
     query_object = embeddings[query_index]
 
     similarity_scores = calculate_similarity(query_object, embeddings)
-
     similarity_indices = np.argsort(-similarity_scores)[:nnearest]
     similarity_score = similarity_scores[similarity_indices]
-
-    # TODO: this should be done at the dataset level
-    # # now remove galaxies that are suspiciously close to each other on the sky
-    # # which happens when individual galaxies in a cluster are included as separate sources in the catalogue
-    # similarity_dict = load_from_catalogue_indices(
-    #     include_extra_features=False, inds_load=similar_inds
-    # )
-
-    # # all vs all calculation
-    # sep = angular_separation(
-    #     similarity_dict["ra"][np.newaxis, ...],
-    #     similarity_dict["dec"][np.newaxis, ...],
-    #     similarity_dict["ra"][..., np.newaxis],
-    #     similarity_dict["dec"][..., np.newaxis],
-    # )
-
-    # # compile indices of galaxies too close in angular coordinates
-    # inds_del = set()
-    # for i in range(sep.shape[0]):
-    #     inds_cuti = set(
-    #         np.where(sep[i, (i + 1) :] < min_angular_separation * pixel_size)[0]
-    #         + (i + 1)
-    #     )
-    #     inds_del = inds_del | inds_cuti  # keep only unique indices
-
-    # # remove duplicate galaxies from similarity arrays
-    # inds_del = sorted(inds_del)
-    # similar_inds = np.delete(similar_inds, inds_del)
-    # similarity_score = np.delete(similarity_score, inds_del)
 
     return {"index": similarity_indices, "score": similarity_score}
 
@@ -197,32 +182,6 @@ RGB_SCALES = {
 }
 
 
-# def decals_to_rgb(image, bands=["g", "r", "z"], scales=None, m=0.03, Q=20.0):
-#     """Image processing function to convert DECaLS images to RGB.
-
-#     Args:
-#         image: torch.Tensor
-#             The input image tensor with shape [batch, 3, npix, npix]
-#     Returns:
-#         torch.Tensor: The processed image tensor with shape [batch, 3, npix, npix, 3]
-#     """
-#     axes, scales = zip(*[RGB_SCALES[bands[i]] for i in range(len(bands))])
-#     scales = [scales[i] for i in axes]
-#     # Changing image shape to [batch_size, npix, npix, nchannel]
-#     image = image.flip(-1)  # TODO: Figure out why flipping axis is necessary
-#     scales = torch.tensor(scales, dtype=torch.float32).to(image.device)
-
-#     I = torch.sum(torch.clamp(image * scales + m, min=0), dim=-1) / len(bands)
-
-#     fI = torch.arcsinh(Q * I) / np.sqrt(Q)
-#     I += (I == 0.0) * 1e-6
-
-#     image = (image * scales + m) * (fI / I).unsqueeze(-1)
-#     image = torch.clamp(image, 0, 1)
-
-#     return image
-
-
 def get_image_url_from_coordinates(ra: float, dec: float) -> str:
     return f"https://www.legacysurvey.org/viewer/jpeg-cutout?ra={float(ra)}&dec={float(dec)}&layer=ls-dr9-north&pixscale=0.262"
 
@@ -231,9 +190,10 @@ def get_spectrum_from_targets(client: SparclClient, targetids: list) -> np.ndarr
     object_id = client.find(
         outfields=["sparcl_id"], constraints={"targetid": targetids}
     )
-    retrieved_object = [client.retrieve([idx], include=["flux"]) for idx in object_id.ids]
-    
-    
+    retrieved_object = [
+        client.retrieve([idx], include=["flux"]) for idx in object_id.ids
+    ]
+
     # bug in client: parallelization does not work (pickle file truncated)
     # retrieved_object = client.retrieve(object_id.ids, include=["flux"])
     return np.array([r[1]["flux"] for idx, r in enumerate(retrieved_object)])

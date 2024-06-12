@@ -15,6 +15,7 @@ from astro_utils import (
     radec_string_to_degrees,
     get_image_url_from_coordinates,
     get_spectrum_from_targets,
+    SUGGESTED_GALAXIES,
 )
 
 
@@ -132,6 +133,7 @@ def galaxy_search():
                 - Use the south survey (select the <Legacy Surveys DR9-south images> option). Currently not all galaxies are included, but most bright ones should be.
                 """
         )
+
     # st.sidebar.markdown('### Set up and submit your query!')
     ra_unit_formats = "degrees or HH:MM:SS"
     dec_unit_formats = "degrees or DD:MM:SS"
@@ -152,124 +154,134 @@ def galaxy_search():
         ra_search, dec_search, ra_unit_formats, dec_unit_formats, st_obj=st
     )
 
+    # dummy
+    search = st.sidebar.button("Search")
+
+    def pick_random():
+        input_ra, input_dec = SUGGESTED_GALAXIES[
+            np.random.choice(len(SUGGESTED_GALAXIES))
+        ]
+        st.session_state.ra = f"{input_ra:2.2f}"
+        st.session_state.dec = f"{input_dec:2.2f}"
+
+    choose_random = st.sidebar.button("Pick random galaxy", on_click=pick_random)
+
     num_nearest_vals = [i**2 for i in range(3, 6)]
     nnearest = st.sidebar.select_slider(
         "Number of similar galaxies to display", num_nearest_vals
     )
 
-    @st.experimental_fragment
-    def show_results(input_ra, input_dec, dataset):
-        # Search object at location
-        input_object = search_catalogue(input_ra, input_dec, dataset)
+    show_results(input_ra, input_dec, dataset, nnearest)
 
-        # Search precomputed embedding (in CLIP dataset)
-        query_index = np.argwhere(clip_targetid == input_object["targetid"])[0]
-        image_embedding = clip_images[query_index]
-        spectrum_embedding = clip_spectra[query_index]
 
-        if len(image_embedding) == 0 or len(spectrum_embedding) == 0:
-            print("No clip embedding found.")
+@st.experimental_fragment
+def show_results(input_ra, input_dec, dataset, nnearest):
+    # Search object at location
+    input_object = search_catalogue(input_ra, input_dec, dataset)
 
-        # Search raw image/spectra
-        ra, dec = input_object["ra"], input_object["dec"]
-        image_raw_url = get_image_url_from_coordinates(ra=ra, dec=dec)
-        # spectrum_raw_url = ... # not being shown
+    # Search precomputed embedding (in CLIP dataset)
+    query_index = np.argwhere(clip_targetid == input_object["targetid"])[0]
+    image_embedding = clip_images[query_index]
+    spectrum_embedding = clip_spectra[query_index]
 
-        # Compute similarity
-        result_images_idx = similarity_search(
-            query_index, clip_images, nnearest=nnearest + 1
-        )
-        result_images = []
-        for targetid in clip_targetid[result_images_idx["index"]]:
-            idx = np.argwhere(clip_targetid == targetid)[0]
-            ra, dec = dataset[idx]["ra"], dataset[idx]["dec"]
-            found_image_url = get_image_url_from_coordinates(ra=ra, dec=dec)
-            result_images.append(found_image_url)
+    if len(image_embedding) == 0 or len(spectrum_embedding) == 0:
+        print("No clip embedding found.")
 
-        result_spectra_idx = similarity_search(
-            query_index, clip_spectra, nnearest=nnearest + 1
-        )
-        result_spectra = get_spectrum_from_targets(
-            sparcl_client, targetids=clip_targetid[result_spectra_idx["index"]].tolist()
-        )
+    # Search raw image/spectra
+    ra, dec = input_object["ra"], input_object["dec"]
+    image_raw_url = get_image_url_from_coordinates(ra=ra, dec=dec)
+    # spectrum_raw_url = ... # not being shown
 
-        # Plots
-        ncolumns = min(11, int(math.ceil(np.sqrt(nnearest))))
-        nrows = int(math.ceil(nnearest / ncolumns))
+    # Compute similarity
+    result_images_idx = similarity_search(
+        query_index, clip_images, nnearest=nnearest + 1
+    )
+    result_images = []
+    for targetid in clip_targetid[result_images_idx["index"]]:
+        idx = np.argwhere(clip_targetid == targetid)[0]
+        ra, dec = dataset[idx]["ra"], dataset[idx]["dec"]
+        found_image_url = get_image_url_from_coordinates(ra=ra, dec=dec)
+        result_images.append(found_image_url)
 
-        lab = "Query galaxy"
-        lab_radec = "RA, Dec = ({:.4f}, {:.4f})".format(
-            input_object["ra"], input_object["dec"]
-        )
-        page_cols = st.columns(3)
-        page_cols[0].subheader(lab)
-        page_cols[0].image(
-            image_raw_url,
-            use_column_width="always",
-            caption=lab_radec,
-        )  # use_column_width='auto')
+    result_spectra_idx = similarity_search(
+        query_index, clip_spectra, nnearest=nnearest + 1
+    )
+    result_spectra = get_spectrum_from_targets(
+        sparcl_client, targetids=clip_targetid[result_spectra_idx["index"]].tolist()
+    )
 
-        page_cols[1].subheader("Most similar images")
-        page_cols[2].subheader("Most similar spectra")
+    # Plots
+    ncolumns = min(11, int(math.ceil(np.sqrt(nnearest))))
+    nrows = int(math.ceil(nnearest / ncolumns))
 
-        #### SIMILAR IMAGES
-        image_cols = page_cols[1].columns(ncolumns)
+    lab = "Query galaxy"
+    lab_radec = "RA, Dec = ({:.4f}, {:.4f})".format(
+        input_object["ra"], input_object["dec"]
+    )
+    page_cols = st.columns(3)
+    page_cols[0].subheader(lab)
+    page_cols[0].image(
+        image_raw_url,
+        use_column_width="always",
+        caption=lab_radec,
+    )  # use_column_width='auto')
 
-        # plot rest of images in smaller grid format
-        iimg = 1  # start at 1 as we already included first image above
-        for irow in range(nrows):
+    page_cols[1].subheader("Most similar images")
+    page_cols[2].subheader("Most similar spectra")
+
+    #### SIMILAR IMAGES
+    image_cols = page_cols[1].columns(ncolumns)
+
+    # plot rest of images in smaller grid format
+    iimg = 1  # start at 1 as we already included first image above
+    for irow in range(nrows):
+        if iimg >= len(result_images):
+            break
+
+        for icol in range(ncolumns):
             if iimg >= len(result_images):
                 break
+            image_url = result_images[iimg]
+            lab = f"Similarity={result_images_idx['score'][iimg]:.4f}\n"
+            if ncolumns > 5:
+                lab = None
 
-            for icol in range(ncolumns):
-                if iimg >= len(result_images):
-                    break
-                image_url = result_images[iimg]
-                lab = f"Similarity={result_images_idx['score'][iimg]:.4f}\n"
-                if ncolumns > 5:
-                    lab = None
+            # add image to grid
+            image_cols[icol].image(
+                image_url,
+                caption=lab,
+                use_column_width="always",
+            )
+            iimg += 1
 
-                # add image to grid
-                image_cols[icol].image(
-                    image_url,
-                    caption=lab,
-                    use_column_width="always",
-                )
-                iimg += 1
+    #### SIMILAR SPECTRA
+    spectrum_cols = page_cols[2].columns(ncolumns)
 
-        #### SIMILAR SPECTRA
-        spectrum_cols = page_cols[2].columns(ncolumns)
+    # plot rest of spectra in smaller grid format
+    iimg = 1  # start at 1 as we already included first image above
+    for irow in range(nrows):
+        if iimg >= len(result_images):
+            break
 
-        # plot rest of spectra in smaller grid format
-        iimg = 1  # start at 1 as we already included first image above
-        for irow in range(nrows):
-            if iimg >= len(result_images):
+        for icol in range(ncolumns):
+            if iimg >= len(result_spectra):
                 break
 
-            for icol in range(ncolumns):
-                if iimg >= len(result_spectra):
-                    break
+            spectrum = result_spectra[iimg]
+            lab = f"Similarity={result_spectra_idx['score'][iimg]:.4f}\n"
+            if ncolumns > 5:
+                lab = None
 
-                spectrum = result_spectra[iimg]
-                lab = f"Similarity={result_spectra_idx['score'][iimg]:.4f}\n"
-                if ncolumns > 5:
-                    lab = None
+            # add spectrum to grid
+            fig = plt.figure()
+            plt.plot(spectrum.squeeze()[::20])
+            plt.title(lab)
+            spectrum_cols[icol].pyplot(fig, use_container_width=True)
 
-                # add spectrum to grid
-                fig = plt.figure()
-                plt.plot(spectrum.squeeze()[::20])
-                plt.title(lab)
-                spectrum_cols[icol].pyplot(fig, use_container_width=True)
-
-                iimg += 1
-
-    show_results(input_ra, input_dec, dataset)
+            iimg += 1
 
 
 if display_method:
     describe_method()
 else:
-
     galaxy_search()
-    # gc.collect()
-    # compare_snapshots(_TRACES)
