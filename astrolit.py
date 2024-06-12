@@ -297,7 +297,7 @@ def galaxy_search():
             break
 
         for icol in range(ncolumns):
-            if iimg >= len(result_images):
+            if iimg >= len(result_spectra):
                 break
 
             spectrum = result_spectra[iimg]
