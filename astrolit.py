@@ -1,6 +1,5 @@
 from astropy.table import Table
-
-# import gc
+from enum import StrEnum
 import matplotlib.pyplot as plt
 import math
 import numpy as np
@@ -17,6 +16,12 @@ from astro_utils import (
     get_spectrum_from_targets,
     SUGGESTED_GALAXIES,
 )
+
+
+class ModalityEnum(StrEnum):
+    SPECTRUM = "Spectrum"
+    IMAGE = "Image"
+    BOTH = "Image+Spectrum"
 
 
 st.set_page_config(
@@ -92,6 +97,12 @@ with st.spinner(text="Loading embedding dataset..."):
     clip_spectra = dataset["spectrum_embeddings"]
 ###########################################################
 
+# Initialize default
+if "ra" not in st.session_state:
+    st.session_state["ra"] = "217.09"
+if "dec" not in st.session_state:
+    st.session_state["dec"] = "35.41"
+
 
 def describe_method():
     st.button("Back to Galaxy Finder")
@@ -135,7 +146,7 @@ def galaxy_search():
                 """
         )
 
-    st.sidebar.markdown('### Search a galaxy')
+    st.sidebar.markdown("### Search a galaxy")
     ra_unit_formats = "degrees or HH:MM:SS"
     dec_unit_formats = "degrees or DD:MM:SS"
 
@@ -143,16 +154,21 @@ def galaxy_search():
         "RA",
         key="ra",
         help="Right Ascension of query galaxy ({:s})".format(ra_unit_formats),
-        value="270.40",
     )
     dec_search = st.sidebar.text_input(
         "Dec",
         key="dec",
         help="Declination of query galaxy ({:s})".format(dec_unit_formats),
-        value="62.31",
     )
     input_ra, input_dec = radec_string_to_degrees(
         ra_search, dec_search, ra_unit_formats, dec_unit_formats, st_obj=st
+    )
+
+    # modality
+    modality = st.sidebar.radio(
+        "Search from",
+        [ModalityEnum.IMAGE, ModalityEnum.SPECTRUM, ModalityEnum.BOTH],
+        help="Search similar galaxies using either the image embedding, the associated spectrum embedding, or the average of both.",
     )
 
     # dummy
@@ -173,11 +189,11 @@ def galaxy_search():
     )
 
     with st.spinner("Loading images and spectra from Legacy Survey server..."):
-        show_results(input_ra, input_dec, dataset, nnearest)
+        show_results(input_ra, input_dec, dataset, nnearest, modality)
 
 
 @st.experimental_fragment
-def show_results(input_ra, input_dec, dataset, nnearest):
+def show_results(input_ra, input_dec, dataset, nnearest, modality):
     # Search object at location
     input_object = search_catalogue(input_ra, input_dec, dataset)
 
@@ -191,12 +207,19 @@ def show_results(input_ra, input_dec, dataset, nnearest):
 
     # Search raw image/spectra
     ra, dec = input_object["ra"], input_object["dec"]
-    image_raw_url = get_image_url_from_coordinates(ra=ra, dec=dec)
-    # spectrum_raw_url = ... # not being shown
 
     # Compute similarity
+    if modality == ModalityEnum.IMAGE:
+        target_embeddings = clip_images
+    elif modality == ModalityEnum.SPECTRUM:
+        target_embeddings = clip_spectra
+    elif modality == ModalityEnum.BOTH:
+        target_embeddings = 0.5 * (clip_images + clip_spectra)
+    else:
+        print("Invalid modality option")
+
     result_images_idx = similarity_search(
-        query_index, clip_images, nnearest=nnearest + 1
+        query_index, target_embeddings, nnearest=nnearest + 1
     )
     result_images = []
     for targetid in clip_targetid[result_images_idx["index"]]:
@@ -216,18 +239,37 @@ def show_results(input_ra, input_dec, dataset, nnearest):
     ncolumns = min(11, int(math.ceil(np.sqrt(nnearest))))
     nrows = int(math.ceil(nnearest / ncolumns))
 
-    lab = "Query galaxy"
+    lab = "Query:"
     lab_radec = "RA, Dec = ({:.4f}, {:.4f})".format(
         input_object["ra"], input_object["dec"]
     )
-    page_cols = st.columns(3)
-    page_cols[0].subheader(lab)
-    page_cols[0].image(
-        image_raw_url,
-        use_column_width="always",
-        caption=lab_radec,
-    )  # use_column_width='auto')
 
+    page_cols = st.columns(3)
+
+    # Container #0 (left): query galaxy
+    query_container = page_cols[0].container(border=True)
+    query_container.subheader(lab)
+    if modality == ModalityEnum.IMAGE or modality == ModalityEnum.BOTH:
+        image_raw_url = get_image_url_from_coordinates(ra=ra, dec=dec)
+        query_container.image(
+            image_raw_url,
+            use_column_width="always",
+            caption=lab_radec,
+        )  # use_column_width='auto')
+
+    if modality == ModalityEnum.SPECTRUM or modality == ModalityEnum.BOTH:
+        spectrum_raw = get_spectrum_from_targets(
+            sparcl_client, targetids=[input_object["targetid"].tolist()]
+        )
+        # add spectrum to grid
+        fig = plt.figure()
+        plt.plot(spectrum_raw.squeeze()[::20])
+        query_container.pyplot(
+            fig,
+            use_container_width="always",
+        )
+
+    # CLIP Results
     page_cols[1].subheader("Most similar images")
     page_cols[2].subheader("Most similar spectra")
 
