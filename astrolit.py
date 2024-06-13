@@ -5,6 +5,7 @@ import math
 import numpy as np
 import os
 import streamlit as st
+import streamlit_nested_layout
 from sparcl.client import SparclClient
 
 # from debug import compare_snapshots, init_tracking_object
@@ -165,11 +166,18 @@ def galaxy_search():
     )
 
     # modality
-    modality = st.sidebar.radio(
+    source_modality = st.sidebar.radio(
         "Search from",
         [ModalityEnum.IMAGE, ModalityEnum.SPECTRUM, ModalityEnum.BOTH],
-        help="Search similar galaxies using either the image embedding, the associated spectrum embedding, or the average of both.",
+        help="Search galaxies similar to either the image embedding, the associated spectrum embedding, or the average of both.",
     )
+    target_modality = st.sidebar.radio(
+        "Compare with",
+        [ModalityEnum.IMAGE, ModalityEnum.SPECTRUM, ModalityEnum.BOTH],
+        help="Look for similar galaxies using either the image embedding, the associated spectrum embedding, or the average of both.",
+    )
+
+
 
     # dummy
     search = st.sidebar.button("Search")
@@ -189,11 +197,11 @@ def galaxy_search():
     )
 
     with st.spinner("Loading images and spectra from Legacy Survey server..."):
-        show_results(input_ra, input_dec, dataset, nnearest, modality)
+        show_results(input_ra, input_dec, dataset, nnearest, source_modality, target_modality)
 
 
 @st.experimental_fragment
-def show_results(input_ra, input_dec, dataset, nnearest, modality):
+def show_results(input_ra, input_dec, dataset, nnearest, source_modality, target_modality):
     # Search object at location
     input_object = search_catalogue(input_ra, input_dec, dataset)
 
@@ -209,30 +217,37 @@ def show_results(input_ra, input_dec, dataset, nnearest, modality):
     ra, dec = input_object["ra"], input_object["dec"]
 
     # Compute similarity
-    if modality == ModalityEnum.IMAGE:
-        target_embeddings = clip_images
-    elif modality == ModalityEnum.SPECTRUM:
-        target_embeddings = clip_spectra
-    elif modality == ModalityEnum.BOTH:
-        target_embeddings = 0.5 * (clip_images + clip_spectra)
+    if source_modality == ModalityEnum.IMAGE:
+        query = clip_images
+    elif source_modality == ModalityEnum.SPECTRUM:
+        query = clip_spectra
+    elif source_modality == ModalityEnum.BOTH:
+        query = 0.5 * (clip_images + clip_spectra)
     else:
         print("Invalid modality option")
 
-    result_images_idx = similarity_search(
-        query_index, target_embeddings, nnearest=nnearest + 1
+    # Compute similarity
+    if target_modality == ModalityEnum.IMAGE:
+        target = clip_images
+    elif target_modality == ModalityEnum.SPECTRUM:
+        target = clip_spectra
+    elif target_modality == ModalityEnum.BOTH:
+        target = 0.5 * (clip_images + clip_spectra)
+    else:
+        print("Invalid modality option")
+
+    result_idx = similarity_search(
+        query[query_index], target, nnearest=nnearest + 1
     )
     result_images = []
-    for targetid in clip_targetid[result_images_idx["index"]]:
+    for targetid in clip_targetid[result_idx["index"]]:
         idx = np.argwhere(clip_targetid == targetid)[0]
-        ra, dec = dataset[idx]["ra"], dataset[idx]["dec"]
-        found_image_url = get_image_url_from_coordinates(ra=ra, dec=dec)
+        found_ra, found_dec = dataset[idx]["ra"], dataset[idx]["dec"]
+        found_image_url = get_image_url_from_coordinates(ra=found_ra, dec=found_dec)
         result_images.append(found_image_url)
 
-    result_spectra_idx = similarity_search(
-        query_index, clip_spectra, nnearest=nnearest + 1
-    )
     result_spectra = get_spectrum_from_targets(
-        sparcl_client, targetids=clip_targetid[result_spectra_idx["index"]].tolist()
+        sparcl_client, targetids=clip_targetid[result_idx["index"]].tolist()
     )
 
     # Plots
@@ -244,37 +259,36 @@ def show_results(input_ra, input_dec, dataset, nnearest, modality):
         input_object["ra"], input_object["dec"]
     )
 
-    page_cols = st.columns(3)
+    page_cols = st.columns([3,7])
 
     # Container #0 (left): query galaxy
-    query_container = page_cols[0].container(border=True)
+    query_container = page_cols[0].container(border=False)
     query_container.subheader(lab)
-    if modality == ModalityEnum.IMAGE or modality == ModalityEnum.BOTH:
-        image_raw_url = get_image_url_from_coordinates(ra=ra, dec=dec)
-        query_container.image(
-            image_raw_url,
-            use_column_width="always",
-            caption=lab_radec,
-        )  # use_column_width='auto')
+    
+    # Always show both
+    image_raw_url = get_image_url_from_coordinates(ra=ra, dec=dec)
+    query_container.image(
+        image_raw_url,
+        use_column_width="always",
+        caption=lab_radec,
+    )  # use_column_width='auto')
 
-    if modality == ModalityEnum.SPECTRUM or modality == ModalityEnum.BOTH:
-        spectrum_raw = get_spectrum_from_targets(
-            sparcl_client, targetids=[input_object["targetid"].tolist()]
-        )
-        # add spectrum to grid
-        fig = plt.figure()
-        plt.plot(spectrum_raw.squeeze()[::20])
-        query_container.pyplot(
-            fig,
-            use_container_width="always",
-        )
+    spectrum_raw = get_spectrum_from_targets(
+        sparcl_client, targetids=[input_object["targetid"].tolist()]
+    )
+    # add spectrum to grid
+    fig = plt.figure()
+    plt.plot(spectrum_raw.squeeze()[::20])
+    query_container.pyplot(
+        fig,
+        use_container_width="always",
+    )
 
     # CLIP Results
-    page_cols[1].subheader("Most similar images")
-    page_cols[2].subheader("Most similar spectra")
+    page_cols[1].subheader("Most similar objects")
 
     #### SIMILAR IMAGES
-    image_cols = page_cols[1].columns(ncolumns)
+    result_cols = page_cols[1].columns(ncolumns)
 
     # plot rest of images in smaller grid format
     iimg = 1  # start at 1 as we already included first image above
@@ -286,43 +300,30 @@ def show_results(input_ra, input_dec, dataset, nnearest, modality):
             if iimg >= len(result_images):
                 break
             image_url = result_images[iimg]
-            lab = f"Similarity={result_images_idx['score'][iimg]:.4f}\n"
             if ncolumns > 5:
                 lab = None
-
+                
+            current_container = result_cols[icol].container(border=True)
+            
+            current_image, current_spectrum = current_container.columns(2)
             # add image to grid
-            image_cols[icol].image(
+            current_image.image(
                 image_url,
-                caption=lab,
-                use_column_width="always",
+                # caption=lab,
+                # use_column_width="always",
             )
-            iimg += 1
-
-    #### SIMILAR SPECTRA
-    spectrum_cols = page_cols[2].columns(ncolumns)
-
-    # plot rest of spectra in smaller grid format
-    iimg = 1  # start at 1 as we already included first image above
-    for irow in range(nrows):
-        if iimg >= len(result_images):
-            break
-
-        for icol in range(ncolumns):
-            if iimg >= len(result_spectra):
-                break
-
-            spectrum = result_spectra[iimg]
-            lab = f"Similarity={result_spectra_idx['score'][iimg]:.4f}\n"
-            if ncolumns > 5:
-                lab = None
-
             # add spectrum to grid
+            spectrum = result_spectra[iimg]
             fig = plt.figure()
             plt.plot(spectrum.squeeze()[::20])
-            plt.title(lab)
-            spectrum_cols[icol].pyplot(fig, use_container_width=True)
+            current_spectrum.pyplot(fig, 
+                                    #  use_container_width=True
+                                    )
 
+            # current_container.markdown(f\n")
+            current_container.progress(value=float(result_idx['score'][iimg]), text=f"Similarity={result_idx['score'][iimg]:.4f}")
             iimg += 1
+            
 
 
 if display_method:

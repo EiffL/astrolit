@@ -140,14 +140,14 @@ def search_catalogue(ra, dec, catalog, nnearest=1, far_distance_npix=10):
 
 
 def calculate_similarity(vector, embeddings):
-    norm_vector = vector / (vector**2).sum(-1, keepdims=True)
-    norm_embeddings = embeddings / (embeddings**2).sum(-1, keepdims=True)
+    norm_vector = vector / np.sqrt((vector**2).sum(-1, keepdims=True))
+    norm_embeddings = embeddings / np.sqrt((embeddings**2).sum(-1, keepdims=True))
 
     return (norm_embeddings @ norm_vector.T).squeeze()
 
 
 def similarity_search(
-    query_index,
+    query,
     embeddings,
     nnearest=5,
 ):
@@ -164,9 +164,8 @@ def similarity_search(
     similarity_inv: bool
         If True returns most similar, if False returns least similar
     """
-    query_object = embeddings[query_index]
 
-    similarity_scores = calculate_similarity(query_object, embeddings)
+    similarity_scores = calculate_similarity(query, embeddings)
     similarity_indices = np.argsort(-similarity_scores)[:nnearest]
     similarity_score = similarity_scores[similarity_indices]
 
