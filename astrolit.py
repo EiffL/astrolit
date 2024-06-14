@@ -34,20 +34,20 @@ st.set_page_config(
 
 # _TRACES = init_tracking_object()
 
-# st.markdown(
-#     """
-#     <style>
-#     [data-testid="stSidebar"][aria-expanded="true"] > div:first-child {
-#     width: 250px;
-# }
-#     [data-testid="stSidebar"][aria-expanded="false"] > div:first-child {
-#     width: 250px;
-#     margin-left: -250px;
-#     }
-#     </style>
-#     """,
-#     unsafe_allow_html=True,
-# )
+st.markdown(
+    """
+    <style>
+    [data-testid="stSidebar"][aria-expanded="true"] > div:first-child {
+    width: 250px;
+}
+    [data-testid="stSidebar"][aria-expanded="false"] > div:first-child {
+    width: 250px;
+    margin-left: -250px;
+    }
+    </style>
+    """,
+    unsafe_allow_html=True,
+)
 
 header_cols = st.columns((1))
 header_cols[0].title("Welcome to AstroCLIP Galaxy Finder")
