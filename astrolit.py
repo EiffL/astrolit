@@ -58,7 +58,7 @@ header_cols[0].markdown(
     """
 )
 
-display_method = header_cols[-1].button("About")
+# display_method = header_cols[-1].button("About")
 
 
 ###########################################################
@@ -116,23 +116,9 @@ def describe_method():
         - [Paper](https://arxiv.org/abs/2310.03024)
         - [Blog](https://polymathic-ai.org/blog/astroclip_update/)
         - [Code](https://github.com/PolymathicAI/AstroCLIP)
-        
-        A bit about the method: 
-        - The similarity of two images is quite easy to judge by eye - but writing an algorithm to do the same is not as easy as one might think! This is because as hunans we can easily identify and understand what object is in the image.                     
-        - A machine is different - it simply looks individual pixezl values. Yet two images that to us have very similar properties and appearences will likely have vastly different pixel values. For example, imagine rotating a galaxy image by 90 degrees. It it obviously still the same galaxy, but the pixel values have completeley changed.                                       
-        - So the first step is to teach a computer to understand what is actually in the image on a deeper level than just looking at pixel values. Unfortunately we do not have any information alongside the image specifying what type of galaxy is actually in it - so where do we start?                                                                                                   
-        - We used a type of machine learning called "self-supervised representation learning" to boil down each image into a concentrated vector of information, or "representation", that encapsulates the appearance and properties of the galaxy.
-        - Self-supervised learning works by creating multiple versions of each image which approximate the observational symmetries, errors, and uncertainties within the dataset, such as image rotations, adding noise, blurring it, etc., and then teaching the machine to learn the same representation for all these versions of the same galaxy. In this way, we move beyond looking at pixel values, and teach the machine a deeper understanding of the image.
-        - Once we have trained the machine learning model on millions of galaxies we calculate and save the representation of every image in the dataset, and precompute the similarity of any two galaxies. Then, you tell us what galaxy to use as a starting point, we find the representation belonging to the image of that galaxy, compare it to millions of other representations from all the other galaxies, and return the most similar images!
-        
-        **Please see [our overview paper](https://arxiv.org/abs/2110.13151) for more technical details, or see our recent application of the app to find [strong gravitational lenses](https://arxiv.org/abs/2012.13083) -- some of the rarest and most interesting objects in the universe!**
-        
-        Dataset:
-        
-        - We used galaxy images from [DECaLS DR9](https://www.legacysurvey.org/), randomly sampling 3.5 million galaxies to train the machine learning model. We then apply it on every galaxy in the dataset, about 42 million galaxies with z-band magnitude < 20, so most bright things in the sky should be included, with very dim and small objects likely missing - more to come soon!                                                   
-        - The models were trained using images of size 96 pixels by 96 pixels centered on the galaxy. So features outside of this central region are not used to calculate the similarity, but are sometimes nice to look at                                                                                                                
+                                                            
         Forked from [George Stein](https://georgestein.github.io/)  
-        Created by [Polymathic AI](https://polymathic-ai.org/)
+        By [Polymathic AI](https://polymathic-ai.org/)
         
         _**Advancing Science through Multi‑Disciplinary AI**_:
         _We usher in a new class of machine learning for scientific data, building models that can leverage shared concepts across disciplines. We aim to develop, train, and release such foundation models for use by researchers worldwide._
@@ -272,12 +258,13 @@ def show_results(
 
     result_idx = similarity_search(query[query_index], target, nnearest=nnearest + 1)
     result_images = []
+    result_coordinates = []
     for targetid in clip_targetid[result_idx["index"]]:
         idx = np.argwhere(clip_targetid == targetid)[0]
         found_ra, found_dec = dataset[idx]["ra"], dataset[idx]["dec"]
         found_image_url = get_image_url_from_coordinates(ra=found_ra, dec=found_dec)
         result_images.append(found_image_url)
-
+        result_coordinates.append((found_ra.item(), found_dec.item()))
     result_spectra = get_spectrum_from_targets(
         sparcl_client, targetids=clip_targetid[result_idx["index"]].tolist()
     )
@@ -353,15 +340,18 @@ def show_results(
                 #  use_container_width=True
             )
 
-            # current_container.markdown(f\n")
             current_container.progress(
                 value=float(result_idx["score"][iimg]),
-                text=f"Similarity={result_idx['score'][iimg]:.4f}",
+                text=f"Similarity = {result_idx['score'][iimg]:.4f}",
+            )
+            # current_container.markdown(f\n")
+            current_container.caption(
+                f"RA, Dec = ({result_coordinates[iimg][0]:2.4f}, {result_coordinates[iimg][1]:2.4f}) "
             )
             iimg += 1
 
 
-if display_method:
-    describe_method()
-else:
-    galaxy_search()
+# if display_method:
+#     describe_method()
+# else:
+galaxy_search()
