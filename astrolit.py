@@ -216,7 +216,7 @@ def galaxy_search():
         "[Polymathic AI](https://polymathic-ai.org/)",
         help="Advancing Science through Multi‑Disciplinary AI: we usher in a new class of machine learning for scientific data, building models that can leverage shared concepts across disciplines. We aim to develop, train, and release such foundation models for use by researchers worldwide.",
     )
-
+    sidebar.caption("Adapted from George Stein's galaxy search app.")
 
 @st.experimental_fragment
 def show_results(
